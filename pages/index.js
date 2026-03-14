@@ -60,7 +60,7 @@ const App = () => {
     try {
       const token = process.env.TELEGRAM_BOT_TOKEN; // 這裡要在 Vercel 設定
       // 提醒：這裡需要你的 Chat ID，我們等下教你怎麼拿
-      const chatId = "YOUR_CHAT_ID"; 
+      const chatId = "1851043818"; 
       
       await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
