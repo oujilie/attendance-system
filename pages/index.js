@@ -36,7 +36,7 @@ const INITIAL_EMPLOYEES = Array.from({ length: 15 }, (_, i) => ({
 }));
 
 export default function App() {
-  const [isClient, setIsClient] = useState(false); // 解決 Hydration 錯誤
+  const [isMounted, setIsMounted] = useState(false); // 修正 Hydration 錯誤用
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUser, setCurrentUser] = useState(1);
@@ -45,4 +45,24 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('table'); 
   const [attendanceData, setAttendanceData] = useState({});
   const [punchRecords, setPunchRecords] = useState({}); 
-  const
+  const [editHistory, setEditHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [editingPunch, setEditingPunch] = useState(null);
+
+  // 確保元件掛載後才顯示時間，避免 SSR 時間與客戶端不對稱
+  useEffect(() => {
+    setIsMounted(true);
+    const timer = setInterval(() => setCurrentTime(new Date()), 10);
+    return () => clearInterval(timer);
+  }, []);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const currentDay = currentTime.getDate();
+  const daysInMonth = useMemo(() => {
+    const [year, month] = selectedMonth.split('-').map(Number);
+    return new Date(year, month
