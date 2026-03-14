@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { 
-  Clock, Users, Shield, ChevronLeft, ChevronRight, 
-  LogIn, LogOut, Coffee, CheckCircle 
-} from 'lucide-react';
+import { Clock, Users, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
 
-// 初始化 Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -29,93 +25,82 @@ export default function App() {
     const m = date.getMinutes().toString().padStart(2, '0');
     const s = date.getSeconds().toString().padStart(2, '0');
     const ms = date.getMilliseconds().toString().padStart(3, '0');
-    return `${h}:${m}:${s}.${ms}`;
+    return { main: `${h}:${m}:${s}`, ms: ms };
   };
 
-  const handlePunch = async (type) => {
+  const handlePunch = async (label) => {
     try {
       const { error } = await supabase
         .from('attendance')
-        .insert([{ user_name: selectedUser, type: type }]);
+        .insert([{ user_name: selectedUser, type: label }]);
       if (error) throw error;
-      setToast(`${selectedUser} ${type} 成功！`);
-      setTimeout(() => setToast(null), 3000);
+      setToast(`[${selectedUser}] ${label} 打卡成功`);
     } catch (err) {
-      setToast("雲端同步失敗");
-      setTimeout(() => setToast(null), 3000);
+      setToast("同步失敗");
     }
+    setTimeout(() => setToast(null), 2500);
   };
+
+  const time = formatWithMs(currentTime);
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] p-4 font-sans text-slate-700">
-      <div className="max-w-[1200px] mx-auto bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col h-[92vh]">
+      <div className="max-w-[1100px] mx-auto bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col h-[94vh]">
         
-        {/* 頂部導航列 */}
+        {/* Header */}
         <div className="p-4 flex justify-between items-center border-b border-slate-50">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-500">
-            <span className="p-1.5 bg-slate-100 rounded-lg">📋</span> 員工出勤管理系統 - 008版
+          <div className="flex items-center gap-2 text-[13px] font-bold text-slate-400">
+            <span className="p-1.5 bg-slate-100 rounded-lg text-slate-500">📋</span>
+            員工出勤管理系統 - 008版 (完整假別清單)
           </div>
           <div className="flex items-center gap-3">
-            <select 
-              value={selectedUser}
-              onChange={(e) => setSelectedUser(e.target.value)}
-              className="bg-slate-50 border-none rounded-xl px-4 py-2 font-bold text-blue-600 outline-none"
-            >
-              {EMPLOYEES.map(id => <option key={id} value={id}>切換至 {id}</option>)}
-            </select>
-            <div className="flex bg-slate-100 p-1 rounded-full scale-90">
-              <button onClick={() => setIsAdmin(false)} className={`px-4 py-1.5 rounded-full font-bold transition ${!isAdmin ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>一般員工</button>
-              <button onClick={() => setIsAdmin(true)} className={`px-4 py-1.5 rounded-full font-bold transition ${isAdmin ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>管理端</button>
+            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+              <Users size={14} className="text-slate-400" />
+              <select 
+                value={selectedUser}
+                onChange={(e) => setSelectedUser(e.target.value)}
+                className="bg-transparent border-none text-blue-600 font-bold outline-none text-sm"
+              >
+                {EMPLOYEES.map(id => <option key={id} value={id}>切換至 {id}</option>)}
+              </select>
+            </div>
+            <div className="flex bg-slate-100 p-1 rounded-full items-center">
+              <button onClick={() => setIsAdmin(false)} className={`px-4 py-1.5 rounded-full text-xs font-black transition ${!isAdmin ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>一般員工</button>
+              <button onClick={() => setIsAdmin(true)} className={`px-4 py-1.5 rounded-full text-xs font-black transition ${isAdmin ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>管理端</button>
             </div>
           </div>
         </div>
 
-        {/* 主顯示區 */}
-        <div className="flex-1 overflow-auto p-6 space-y-6">
-          {/* 大數字計時器 */}
-          <div className="relative bg-white rounded-[2.5rem] p-10 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-50 text-center max-w-2xl mx-auto">
-            <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-[10px] font-black text-blue-400 tracking-[0.3em] uppercase">Precision Attendance V008</span>
-            </div>
-            <div className="text-7xl font-mono font-black text-[#1E3A8A] tracking-tighter mt-4">
-              {formatWithMs(currentTime).split('.')[0]}
-              <span className="text-3xl text-orange-500 ml-2">.{formatWithMs(currentTime).split('.')[1]}</span>
-            </div>
+        {/* Main Content */}
+        <div className="flex-1 overflow-auto p-8 flex flex-col items-center">
+          
+          {/* Quick Mock Buttons */}
+          <div className="flex gap-2 mb-8">
+            <button className="bg-slate-900 text-white px-4 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-2">
+              <Clock size={12} /> 模擬打卡
+            </button>
+            {['上班 (07:55)', '上班 (08:05)', '下班 (16:05)', '下班 (21:35)'].map((t, idx) => (
+              <button key={idx} className="bg-white border border-slate-100 px-3 py-1.5 rounded-lg text-[10px] font-bold text-blue-500 hover:bg-blue-50">
+                {t}
+              </button>
+            ))}
           </div>
 
-          {/* 考勤表格 */}
-          <div className="border border-slate-100 rounded-2xl overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <tr>
-                  <th className="p-3 border-r border-slate-100 w-16 text-center">代號</th>
-                  {Array.from({ length: 21 }, (_, i) => (
-                    <th key={i} className="p-3 border-r border-slate-100 text-center">{i + 1}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {EMPLOYEES.slice(0, 6).map(id => (
-                  <tr key={id} className="border-t border-slate-50">
-                    <td className="p-3 border-r border-slate-100 text-center font-bold text-blue-600 bg-slate-50/30">{id}</td>
-                    {Array.from({ length: 21 }, (_, i) => (
-                      <td key={i} className="p-3 border-r border-slate-100"></td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* 底部控制區 (Labels) */}
-        <div className="p-6 bg-white border-t border-slate-50">
-          <div className="flex flex-wrap justify-center gap-2 max-w-3xl mx-auto">
-            <div className="flex items-center gap-2 mr-4 text-blue-400 font-bold text-xs uppercase tracking-widest">
-              <span className="rotate-45">➤</span> Labels
+          {/* Clock Display */}
+          <div className="relative bg-white rounded-[3rem] px-20 py-14 shadow-[0_20px_70px_-10px_rgba(0,0,0,0.05)] border border-slate-50 mb-12 group">
+            <ChevronLeft className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-100 group-hover:text-slate-200 cursor-pointer" />
+            <div className="text-center">
+              <div className="text-8xl font-mono font-black text-[#1E3A8A] tracking-tighter flex items-baseline">
+                {time.main}
+                <span className="text-4xl text-orange-500 ml-3">.{time.ms}</span>
+              </div>
+              <div className="mt-4 text-[11px] font-black text-slate-300 tracking-[0.5em] uppercase">
+                PRECISION ATTENDANCE V008
+              </div>
             </div>
-            {LABELS.map(label => (
-              <button 
-                key={label}
-                onClick={() => handlePunch
+            <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-100 group-hover:text-slate-200 cursor-pointer" />
+          </div>
+
+          {/* Attendance Table */}
+          <div className="w-full border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+            <table className="w-full text-[10px] border-collapse bg-white">
