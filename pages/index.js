@@ -1,45 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { 
-  Calendar, User, Shield, Lock, History, ChevronLeft, ChevronRight, 
-  Info, Clock, Fingerprint, Trash2, Plus, X, CheckCircle2, 
-  BarChart3, Calculator, Beaker, LogIn, LogOut, Users, MousePointer2 
-} from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, CheckCircle } from 'lucide-react';
 
+// 1. 初始化 Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const LEAVE_TYPES = [
-  { id: '休', label: '休', color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200' },
-  { id: '事', label: '事', color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
-  { id: '病', label: '病', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
-  { id: '特', label: '特', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
-  { id: '年', label: '年', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
-  { id: '加', label: '加', color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-200' },
-  { id: '公', label: '公', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
-  { id: '產', label: '產', color: 'text-pink-600', bg: 'bg-pink-50', border: 'border-pink-200' },
-  { id: '檢', label: '檢', color: 'text-teal-600', bg: 'bg-teal-50', border: 'border-teal-200' },
-  { id: '育', label: '育', color: 'text-lime-600', bg: 'bg-lime-50', border: 'border-lime-200' },
-  { id: '婚', label: '婚', color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' },
-  { id: '喪', label: '喪', color: 'text-slate-700', bg: 'bg-slate-100', border: 'border-slate-300' },
-  { id: '理', label: '理', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
-  { id: '福', label: '福', color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200' },
-  { id: '傷', label: '傷', color: 'text-orange-800', bg: 'bg-orange-100', border: 'border-orange-300' },
-  { id: '家', label: '家', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-];
-
-const INITIAL_EMPLOYEES = Array.from({ length: 15 }, (_, i) => ({
-  id: i + 1,
-  name: (i + 1).toString().padStart(3, '0'),
-}));
-
 export default function App() {
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [currentUser, setCurrentUser] = useState(1);
+  const [userName, setUserName] = useState('');
   const [toast, setToast] = useState(null);
 
+  // 更新系統時間
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 10);
     return () => clearInterval(timer);
@@ -58,36 +31,92 @@ export default function App() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleClockPunch = async (label) => {
-    const timeStr = formatWithMs(currentTime);
-    const empName = INITIAL_EMPLOYEES.find(e => e.id === currentUser)?.name;
+  // 核心打卡邏輯
+  const handlePunch = async (type) => {
+    if (!userName.trim()) {
+      showToast("請輸入員工姓名");
+      return;
+    }
+
     try {
-      const { error } = await supabase.from('attendance').insert([{ user_name: empName, type: label }]);
+      const { error } = await supabase
+        .from('attendance')
+        .insert([{ user_name: userName, type: type }]);
+
       if (error) throw error;
-      showToast(`${empName} ${label}打卡成功！`);
+      showToast(`${userName} ${type}打卡成功！`);
     } catch (err) {
-      showToast("同步失敗");
+      console.error(err);
+      showToast("雲端同步失敗，請檢查網路");
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* 專業標題列 */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-          <div className="flex items-center gap-4">
-            <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-200">
-              <Fingerprint className="text-white w-8 h-8" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-slate-900">員工出勤管理系統</h1>
-              <p className="text-slate-500 text-sm font-medium">Professional Attendance System</p>
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+      <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border-t-8 border-blue-500">
+        <div className="p-8 md:p-12">
+          {/* 標題 */}
+          <h1 className="text-2xl font-bold text-slate-800 text-center mb-10 tracking-wider">
+            員工出勤管理系統
+          </h1>
+
+          {/* 時間顯示區 */}
+          <div className="bg-blue-50 rounded-2xl p-6 text-center mb-10">
+            <p className="text-blue-500 text-xs font-bold mb-2 tracking-widest uppercase">目前系統時間</p>
+            <div className="text-4xl font-mono font-black text-blue-700 tracking-tighter">
+              {formatWithMs(currentTime)}
             </div>
           </div>
-          <div className="flex bg-slate-100 p-1 rounded-2xl">
-            <button onClick={() => setIsAdmin(false)} className={`px-6 py-2 rounded-xl font-bold transition ${!isAdmin ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500'}`}>員工打卡</button>
-            <button onClick={() => setIsAdmin(true)} className={`px-6 py-2 rounded-xl font-bold transition ${isAdmin ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500'}`}>管理者模式</button>
+
+          {/* 輸入區 */}
+          <div className="space-y-6">
+            <div>
+              <label className="text-slate-400 text-sm mb-2 block ml-1">員工姓名</label>
+              <div className="relative">
+                <input 
+                  type="text"
+                  placeholder="請輸入您的姓名"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-12 py-4 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-700 font-medium"
+                />
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                </div>
+              </div>
+            </div>
+
+            {/* 按鈕區 */}
+            <div className="grid grid-cols-2 gap-4">
+              <button 
+                onClick={() => handlePunch('上班')}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl py-4 flex items-center justify-center gap-2 font-bold shadow-lg shadow-emerald-100 transition-all active:scale-95"
+              >
+                <Clock size={20} /> 上班打卡
+              </button>
+              <button 
+                onClick={() => handlePunch('下班')}
+                className="bg-rose-500 hover:bg-rose-600 text-white rounded-xl py-4 flex items-center justify-center gap-2 font-bold shadow-lg shadow-rose-100 transition-all active:scale-95"
+              >
+                <LogOut size={20} /> 下班打卡
+              </button>
+              <button 
+                onClick={() => handlePunch('休息開始')}
+                className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl py-4 flex items-center justify-center gap-2 font-bold shadow-lg shadow-amber-100 transition-all active:scale-95"
+              >
+                <Coffee size={20} /> 休息開始
+              </button>
+              <button 
+                onClick={() => handlePunch('休息結束')}
+                className="bg-blue-500 hover:bg-blue-600 text-white rounded-xl py-4 flex items-center justify-center gap-2 font-bold shadow-lg shadow-blue-100 transition-all active:scale-95"
+              >
+                <CheckCircle size={20} /> 休息結束
+              </button>
+            </div>
           </div>
         </div>
+      </div>
 
-        {!isAdmin ? (
+      {/* 提示訊息 */}
+      {toast && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl font-bold animate-in fade-
