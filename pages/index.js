@@ -60,10 +60,26 @@ export default function App() {
     const type = label === "AUTO" ? ((punches[key]?.length || 0) % 2 === 0 ? "IN" : "OUT") : label;
 
     try {
-      const { error } = await supabase.from('attendance').insert([{ user_name: INITIAL_EMPLOYEES.find(e => e.id === user).name, type, created_at: new Date() }]);
+      const { error } = await supabase.from('attendance').insert([{ 
+        user_name: INITIAL_EMPLOYEES.find(e => e.id === user).name, 
+        type, 
+        created_at: new Date() 
+      }]);
+      
       if (error) throw error;
-      setPunches(p => ({ ...p, [key]: [...(p[key] || []), { time: tStr, label: type }] }));
-      setHistory(h => [{ timestamp: formatTime(new Date()), action: `打卡成功(${type})`, target: `${INITIAL_EMPLOYEES.find(e => e.id === user).name} - ${day}日` }, ...h]);
+
+      // 重要：更新打卡紀錄狀態，畫面才會顯示小橘點
+      setPunches(prev => ({
+        ...prev,
+        [key]: [...(prev[key] || []), { time: tStr, label: type }]
+      }));
+
+      setHistory(h => [{ 
+        timestamp: formatTime(new Date()), 
+        action: `打卡成功(${type})`, 
+        target: `${INITIAL_EMPLOYEES.find(e => e.id === user).name} - ${day}日` 
+      }, ...h]);
+
       setToast(`打卡成功: ${tStr}`);
       setTimeout(() => setToast(null), 3000);
     } catch (e) {
@@ -83,14 +99,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F4F6F8] p-4 font-sans text-slate-800 pb-32">
-      {/* 提示訊息 */}
       {toast && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[999] bg-slate-900 text-white px-6 py-2 rounded-full shadow-2xl border border-slate-700 animate-bounce text-sm">
           {toast}
         </div>
       )}
 
-      {/* 頂部選單 */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         <div className="flex bg-slate-200 p-1 rounded-xl">
           <button onClick={() => setActiveTab('table')} className={`px-6 py-1.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'table' ? 'bg-white shadow-sm' : 'text-slate-500'}`}>考勤表格</button>
@@ -109,15 +123,15 @@ export default function App() {
         </div>
       </div>
 
-      {/* 數位時鐘 */}
       <div className="flex flex-col items-center mb-12">
-        {!isAdmin && (
-          <div className="flex gap-2 mb-4">
-            <button onClick={() => handlePunch('07:55', 'IN')} className="px-3 py-1 bg-white border rounded-lg text-[10px] font-black text-blue-600 hover:bg-blue-50">07:55 上班</button>
-            <button onClick={() => handlePunch('16:05', 'OUT')} className="px-3 py-1 bg-white border rounded-lg text-[10px] font-black text-red-600 hover:bg-red-50">16:05 下班</button>
-          </div>
-        )}
-        <button onClick={() => handlePunch()} disabled={isAdmin} className={`group relative p-10 rounded-[3rem] border shadow-2xl transition-all ${isAdmin ? 'bg-slate-50' : 'bg-white hover:scale-105 active:scale-95'}`}>
+        {/* 修正：管理員模式下也能看到模擬按鈕方便測試 */}
+        <div className="flex gap-2 mb-4">
+          <button onClick={() => handlePunch('07:55', 'IN')} className="px-3 py-1 bg-white border rounded-lg text-[10px] font-black text-blue-600 hover:bg-blue-50">07:55 上班</button>
+          <button onClick={() => handlePunch('16:05', 'OUT')} className="px-3 py-1 bg-white border rounded-lg text-[10px] font-black text-red-600 hover:bg-red-50">16:05 下班</button>
+        </div>
+
+        {/* 修正：取消 disabled={isAdmin}，讓你在管理員模式也能點擊大時鐘打卡 */}
+        <button onClick={() => handlePunch()} className="group relative p-10 rounded-[3rem] border shadow-2xl transition-all bg-white hover:scale-105 active:scale-95">
           <div className="text-5xl md:text-7xl font-mono font-black text-slate-900 flex items-baseline">
             {formatTime(time).split('.')[0]}
             <span className="text-2xl md:text-3xl ml-2 text-orange-500 font-bold tabular-nums">.{formatTime(time).split('.')[1]}</span>
@@ -126,7 +140,6 @@ export default function App() {
         </button>
       </div>
 
-      {/* 表格區 */}
       {activeTab === 'table' ? (
         <div className="bg-white rounded-3xl shadow-xl overflow-x-auto border border-slate-100">
           <table className="w-full border-collapse">
@@ -134,8 +147,8 @@ export default function App() {
               <tr className="bg-slate-50 border-b text-[10px] font-black text-slate-400">
                 <th className="sticky left-0 bg-slate-50 p-4 border-r w-16 z-20">代號</th>
                 {days.map(d => (
-                  <th key={d} className="p-2 border-r min-w-[50px]">
-                    <div className="text-slate-800 text-[12px]">{d}</div>
+                  <th key={d} className={`p-2 border-r min-w-[50px] ${d === time.getDate() ? 'bg-orange-50 text-orange-600' : ''}`}>
+                    <div className="text-[12px]">{d}</div>
                   </th>
                 ))}
               </tr>
@@ -143,13 +156,17 @@ export default function App() {
             <tbody>
               {INITIAL_EMPLOYEES.map(emp => (
                 <tr key={emp.id} className={`border-b border-slate-50 ${user === emp.id ? 'bg-blue-50/20' : ''}`}>
-                  <td className="sticky left-0 bg-white p-4 border-r text-center font-black text-sm text-slate-600 z-10">{emp.name}</td>
+                  <td className={`sticky left-0 p-4 border-r text-center font-black text-sm z-10 ${user === emp.id ? 'bg-blue-50 text-blue-600' : 'bg-white text-slate-400'}`}>{emp.name}</td>
                   {days.map(d => {
-                    const val = attendance[`${emp.id}-${month}-${d}`];
+                    const cellKey = `${emp.id}-${month}-${d}`;
+                    const val = attendance[cellKey];
+                    const hasPunch = punches[cellKey]?.length > 0;
                     const type = LEAVE_TYPES.find(t => t.id === val);
                     return (
-                      <td key={d} onClick={() => handleCell(emp.id, d)} className={`border-r h-16 text-center cursor-pointer hover:bg-slate-50 transition-colors ${type?.bg || ''}`}>
+                      <td key={d} onClick={() => handleCell(emp.id, d)} className={`border-r h-16 text-center cursor-pointer hover:bg-slate-50 transition-colors relative ${type?.bg || ''}`}>
                         {val && <span className={`font-black text-lg ${type.color}`}>{val}</span>}
+                        {/* 打卡成功後顯示的小橘點 */}
+                        {hasPunch && <div className="absolute bottom-1 right-1 w-1.5 h-1.5 bg-orange-500 rounded-full" />}
                       </td>
                     );
                   })}
@@ -162,7 +179,6 @@ export default function App() {
         <div className="p-20 text-center font-black text-slate-300 uppercase tracking-widest bg-white rounded-3xl border border-dashed">Analysis Module Loaded</div>
       )}
 
-      {/* 假別選擇器 */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[500] flex flex-wrap justify-center gap-1.5 px-6 py-3 bg-white/90 backdrop-blur rounded-2xl shadow-2xl border border-slate-200 max-w-[95vw]">
         {LEAVE_TYPES.map(t => (
           <button key={t.id} onClick={() => setLeaveType(t.id)} className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all border-2 ${leaveType === t.id ? `${t.border} ${t.bg} ${t.color} scale-110 shadow-md` : 'border-transparent text-slate-400 hover:bg-slate-100'}`}>
@@ -171,14 +187,13 @@ export default function App() {
         ))}
       </div>
 
-      {/* 歷史側欄 */}
       {showHistory && isAdmin && (
         <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl z-[600] p-6 border-l animate-in slide-in-from-right">
           <div className="flex justify-between items-center mb-6 border-b pb-4">
-            <h3 className="font-black text-red-600 text-sm tracking-tighter">SYSTEM LOGS</h3>
+            <h3 className="font-black text-red-600 text-sm tracking-tighter uppercase">System Logs</h3>
             <button onClick={() => setShowHistory(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
           </div>
-          <div className="space-y-4 overflow-y-auto h-full pb-20">
+          <div className="space-y-4 overflow-y-auto h-[calc(100vh-100px)]">
             {history.map((h, i) => (
               <div key={i} className="p-3 bg-slate-50 rounded-lg text-[11px] border border-slate-100">
                 <div className="text-slate-400 font-mono">{h.timestamp}</div>
