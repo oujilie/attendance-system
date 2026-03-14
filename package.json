@@ -1,5 +1,6 @@
 {
   "name": "attendance-system",
+  "version": "1.0.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,5 +13,10 @@
     "lucide-react": "latest",
     "clsx": "latest",
     "tailwind-merge": "latest"
+  },
+  "devDependencies": {
+    "tailwindcss": "latest",
+    "postcss": "latest",
+    "autoprefixer": "latest"
   }
 }
