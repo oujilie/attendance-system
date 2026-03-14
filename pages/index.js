@@ -5,10 +5,7 @@ import {
   LogIn, LogOut, Users, MousePointer2, BarChart3, X, Plus, Trash2, Beaker
 } from 'lucide-react';
 
-// 初始化 Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 const LEAVE_TYPES = [
   { id: '休', label: '休', color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200' },
@@ -26,137 +23,84 @@ const LEAVE_TYPES = [
   { id: '理', label: '理', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
   { id: '福', label: '福', color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200' },
   { id: '傷', label: '傷', color: 'text-orange-800', bg: 'bg-orange-100', border: 'border-orange-300' },
-  { id: '家', label: '家', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  { id: '家', label: '家', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' }
 ];
 
-const INITIAL_EMPLOYEES = Array.from({ length: 15 }, (_, i) => ({
-  id: i + 1,
-  name: (i + 1).toString().padStart(3, '0'),
-}));
+const INITIAL_EMPLOYEES = Array.from({ length: 15 }, (_, i) => ({ id: i + 1, name: (i + 1).toString().padStart(3, '0') }));
 
 export default function App() {
-  const [isMounted, setIsMounted] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [mounted, setMounted] = useState(false);
+  const [time, setTime] = useState(new Date());
   const [isAdmin, setIsAdmin] = useState(false);
-  const [currentUser, setCurrentUser] = useState(1);
-  const [selectedMonth, setSelectedMonth] = useState('2026-03');
-  const [selectedLeaveType, setSelectedLeaveType] = useState('休'); 
-  const [activeTab, setActiveTab] = useState('table'); 
-  const [attendanceData, setAttendanceData] = useState({});
-  const [punchRecords, setPunchRecords] = useState({}); 
-  const [editHistory, setEditHistory] = useState([]);
+  const [user, setUser] = useState(1);
+  const [month] = useState('2026-03');
+  const [activeTab, setActiveTab] = useState('table');
+  const [leaveType, setLeaveType] = useState('休');
+  const [attendance, setAttendance] = useState({});
+  const [punches, setPunches] = useState({});
+  const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [toast, setToast] = useState(null);
-  const [editingPunch, setEditingPunch] = useState(null);
 
   useEffect(() => {
-    setIsMounted(true);
-    const timer = setInterval(() => setCurrentTime(new Date()), 10);
-    return () => clearInterval(timer);
+    setMounted(true);
+    const t = setInterval(() => setTime(new Date()), 10);
+    return () => clearInterval(t);
   }, []);
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+  const formatTime = (d) => {
+    const pad = (n, l=2) => n.toString().padStart(l, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
   };
 
-  const currentDay = currentTime.getDate();
-  const daysInMonth = useMemo(() => {
-    const [year, month] = selectedMonth.split('-').map(Number);
-    return new Date(year, month, 0).getDate();
-  }, [selectedMonth]);
-
-  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-
-  const getDayOfWeek = (day) => {
-    const [year, month] = selectedMonth.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
-    const weeks = ['日', '一', '二', '三', '四', '五', '六'];
-    return weeks[date.getDay()];
-  };
-
-  const formatWithMs = (date) => {
-    const h = date.getHours().toString().padStart(2, '0');
-    const m = date.getMinutes().toString().padStart(2, '0');
-    const s = date.getSeconds().toString().padStart(2, '0');
-    const ms = date.getMilliseconds().toString().padStart(3, '0');
-    return `${h}:${m}:${s}.${ms}`;
-  };
-
-  const handleClockPunch = async (manualBaseTime = null, label = "AUTO") => {
-    const timeStr = manualBaseTime ? `${manualBaseTime}:00.000` : formatWithMs(currentTime);
-    const empName = INITIAL_EMPLOYEES.find(e => e.id === currentUser)?.name;
-    const punchKey = `${currentUser}-${selectedMonth}-${currentDay}`;
-    
-    let finalLabel = label;
-    if (label === "AUTO") {
-      const existing = punchRecords[punchKey] || [];
-      finalLabel = existing.length % 2 === 0 ? "IN" : "OUT";
-    }
+  const handlePunch = async (mTime = null, label = "AUTO") => {
+    const tStr = mTime ? `${mTime}:00.000` : formatTime(time);
+    const day = time.getDate();
+    const key = `${user}-${month}-${day}`;
+    const type = label === "AUTO" ? ((punches[key]?.length || 0) % 2 === 0 ? "IN" : "OUT") : label;
 
     try {
-      const { error } = await supabase.from('attendance').insert([
-        { user_name: empName, type: finalLabel, created_at: new Date() }
-      ]);
-      
+      const { error } = await supabase.from('attendance').insert([{ user_name: INITIAL_EMPLOYEES.find(e => e.id === user).name, type, created_at: new Date() }]);
       if (error) throw error;
-
-      setPunchRecords(prev => ({ 
-        ...prev, 
-        [punchKey]: [...(prev[punchKey] || []), { time: timeStr, label: finalLabel }] 
-      }));
-
-      setEditHistory(prev => [{
-        timestamp: formatWithMs(new Date()),
-        admin: manualBaseTime ? '系統模擬' : `員工(${empName})`,
-        action: `打卡成功 (${finalLabel === 'IN' ? '上班' : '下班'} ${timeStr})`,
-        target: `代號:${empName}, 日期:${currentDay}日`
-      }, ...prev]);
-
-      showToast(`打卡成功：${timeStr}`);
-    } catch (err) {
-      showToast("雲端同步失敗");
+      setPunches(p => ({ ...p, [key]: [...(p[key] || []), { time: tStr, label: type }] }));
+      setHistory(h => [{ timestamp: formatTime(new Date()), action: `打卡成功(${type})`, target: `${INITIAL_EMPLOYEES.find(e => e.id === user).name} - ${day}日` }, ...h]);
+      setToast(`打卡成功: ${tStr}`);
+      setTimeout(() => setToast(null), 3000);
+    } catch (e) {
+      setToast("同步失敗");
+      setTimeout(() => setToast(null), 3000);
     }
   };
 
-  const handleCellClick = (empId, day) => {
-    const cellKey = `${empId}-${selectedMonth}-${day}`;
-    if (isAdmin && (punchRecords[cellKey]?.length > 0 || selectedLeaveType === '打卡編輯')) {
-      setEditingPunch({ empId, day, key: cellKey });
-      return;
-    }
-    const oldValue = attendanceData[cellKey] || '';
-    const newValue = oldValue === selectedLeaveType ? '' : selectedLeaveType;
-    setAttendanceData(prev => ({ ...prev, [cellKey]: newValue }));
+  const handleCell = (uid, d) => {
+    const k = `${uid}-${month}-${d}`;
+    setAttendance(p => ({ ...p, [k]: p[k] === leaveType ? '' : leaveType }));
   };
 
-  if (!isMounted) return <div className="min-h-screen bg-[#F4F6F8]"></div>;
+  if (!mounted) return <div className="min-h-screen bg-slate-50" />;
+
+  const days = Array.from({ length: new Date(2026, 3, 0).getDate() }, (_, i) => i + 1);
 
   return (
-    <div className="min-h-screen bg-[#F4F6F8] text-gray-800 font-sans p-4 relative pb-32">
+    <div className="min-h-screen bg-[#F4F6F8] p-4 font-sans text-slate-800 pb-32">
+      {/* 提示訊息 */}
       {toast && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[500] bg-gray-900 text-white px-6 py-2 rounded-full text-sm shadow-2xl border border-gray-700">
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[999] bg-slate-900 text-white px-6 py-2 rounded-full shadow-2xl border border-slate-700 animate-bounce text-sm">
           {toast}
         </div>
       )}
 
-      {/* 頂部導覽 */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <div className="flex space-x-1 bg-gray-200 p-1 rounded-xl">
-          <button onClick={() => setActiveTab('table')} className={`px-6 py-1.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'table' ? 'bg-white shadow-sm' : 'text-gray-500'}`}>考勤表格</button>
-          <button onClick={() => setActiveTab('overtime')} className={`px-6 py-1.5 rounded-lg text-sm font-bold flex items-center transition-all ${activeTab === 'overtime' ? 'bg-white shadow-sm' : 'text-gray-500'}`}>
-            <BarChart3 size={14} className="mr-1.5 text-blue-500" /> 工時分析
-          </button>
+      {/* 頂部選單 */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+        <div className="flex bg-slate-200 p-1 rounded-xl">
+          <button onClick={() => setActiveTab('table')} className={`px-6 py-1.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'table' ? 'bg-white shadow-sm' : 'text-slate-500'}`}>考勤表格</button>
+          <button onClick={() => setActiveTab('analysis')} className={`px-6 py-1.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'analysis' ? 'bg-white shadow-sm' : 'text-slate-500'}`}>工時分析</button>
         </div>
-        
-        <div className="flex items-center space-x-4">
-          <div className="bg-white px-3 py-1.5 rounded-xl shadow-sm border flex items-center gap-2">
-            <Users size={16} className="text-gray-400" />
-            <select value={currentUser} onChange={(e) => setCurrentUser(Number(e.target.value))} className="bg-transparent text-xs font-black outline-none border-none focus:ring-0">
-              {INITIAL_EMPLOYEES.map(emp => <option key={emp.id} value={emp.id}>切換至 {emp.name}</option>)}
-            </select>
-          </div>
-          <div className="flex items-center space-x-3 bg-white px-4 py-1.5 rounded-xl shadow-sm border">
+        <div className="flex items-center gap-4">
+          <select value={user} onChange={(e) => setUser(Number(e.target.value))} className="bg-white border px-3 py-1.5 rounded-xl text-xs font-black shadow-sm outline-none">
+            {INITIAL_EMPLOYEES.map(e => <option key={e.id} value={e.id}>切換至 {e.name}</option>)}
+          </select>
+          <div className="flex items-center gap-2 bg-white px-4 py-1.5 rounded-xl border shadow-sm">
             <Shield className={`w-4 h-4 ${isAdmin ? 'text-red-600' : 'text-blue-600'}`} />
             <button onClick={() => setIsAdmin(!isAdmin)} className={`w-10 h-5 rounded-full relative transition-colors ${isAdmin ? 'bg-red-500' : 'bg-blue-500'}`}>
               <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${isAdmin ? 'left-6' : 'left-1'}`} />
@@ -166,53 +110,46 @@ export default function App() {
       </div>
 
       {/* 數位時鐘 */}
-      <div className="flex flex-col items-center mb-10">
+      <div className="flex flex-col items-center mb-12">
         {!isAdmin && (
-          <div className="mb-4 flex gap-2">
-            <button onClick={() => handleClockPunch('07:55', 'IN')} className="px-3 py-1 bg-white border rounded-lg text-[10px] font-black text-blue-600 hover:bg-blue-50">07:55 上班</button>
-            <button onClick={() => handleClockPunch('16:05', 'OUT')} className="px-3 py-1 bg-white border rounded-lg text-[10px] font-black text-red-600 hover:bg-red-50">16:05 下班</button>
+          <div className="flex gap-2 mb-4">
+            <button onClick={() => handlePunch('07:55', 'IN')} className="px-3 py-1 bg-white border rounded-lg text-[10px] font-black text-blue-600 hover:bg-blue-50">07:55 上班</button>
+            <button onClick={() => handlePunch('16:05', 'OUT')} className="px-3 py-1 bg-white border rounded-lg text-[10px] font-black text-red-600 hover:bg-red-50">16:05 下班</button>
           </div>
         )}
-
-        <button 
-          onClick={() => handleClockPunch()}
-          disabled={isAdmin}
-          className={`text-5xl md:text-7xl font-mono font-black px-12 py-10 rounded-[3rem] border transition-all shadow-2xl flex flex-col items-center ${isAdmin ? 'bg-gray-50 text-gray-300' : 'bg-white text-blue-900 hover:scale-105 active:scale-95'}`}
-        >
-          <div className="flex items-baseline">
-            {formatWithMs(currentTime).split('.')[0]}
-            <span className="text-2xl md:text-3xl ml-2 text-orange-500 font-bold tabular-nums">.{formatWithMs(currentTime).split('.')[1]}</span>
+        <button onClick={() => handlePunch()} disabled={isAdmin} className={`group relative p-10 rounded-[3rem] border shadow-2xl transition-all ${isAdmin ? 'bg-slate-50' : 'bg-white hover:scale-105 active:scale-95'}`}>
+          <div className="text-5xl md:text-7xl font-mono font-black text-slate-900 flex items-baseline">
+            {formatTime(time).split('.')[0]}
+            <span className="text-2xl md:text-3xl ml-2 text-orange-500 font-bold tabular-nums">.{formatTime(time).split('.')[1]}</span>
           </div>
-          <div className="text-[10px] mt-2 font-black text-gray-400 tracking-[0.5em] uppercase">PRECISION ATTENDANCE v008d</div>
+          <div className="text-[9px] mt-4 font-black text-slate-400 tracking-[0.5em] uppercase text-center">PRECISION v008e</div>
         </button>
       </div>
 
-      {/* 主要內容 */}
+      {/* 表格區 */}
       {activeTab === 'table' ? (
-        <div className="bg-white rounded-3xl shadow-xl overflow-x-auto border">
+        <div className="bg-white rounded-3xl shadow-xl overflow-x-auto border border-slate-100">
           <table className="w-full border-collapse">
             <thead>
-              <tr className="bg-gray-50 border-b text-gray-400 font-black text-[10px] uppercase">
-                <th className="sticky left-0 bg-gray-50 p-4 border-r w-16">代號</th>
-                {daysArray.map(day => (
-                  <th key={day} className={`p-2 border-r min-w-[50px] ${['六','日'].includes(getDayOfWeek(day)) ? 'bg-orange-50/30' : ''}`}>
-                    <div className="text-[13px] text-gray-800">{day}</div>
-                    <div className="text-[9px]">{getDayOfWeek(day)}</div>
+              <tr className="bg-slate-50 border-b text-[10px] font-black text-slate-400">
+                <th className="sticky left-0 bg-slate-50 p-4 border-r w-16 z-20">代號</th>
+                {days.map(d => (
+                  <th key={d} className="p-2 border-r min-w-[50px]">
+                    <div className="text-slate-800 text-[12px]">{d}</div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {INITIAL_EMPLOYEES.map(emp => (
-                <tr key={emp.id} className={`border-b border-gray-100 ${currentUser === emp.id ? 'bg-blue-50/30' : ''}`}>
-                  <td className="sticky left-0 bg-white p-4 border-r text-center font-black text-sm text-gray-600">{emp.name}</td>
-                  {daysArray.map(day => {
-                    const cellKey = `${emp.id}-${selectedMonth}-${day}`;
-                    const value = attendanceData[cellKey];
-                    const typeInfo = LEAVE_TYPES.find(t => t.id === value);
+                <tr key={emp.id} className={`border-b border-slate-50 ${user === emp.id ? 'bg-blue-50/20' : ''}`}>
+                  <td className="sticky left-0 bg-white p-4 border-r text-center font-black text-sm text-slate-600 z-10">{emp.name}</td>
+                  {days.map(d => {
+                    const val = attendance[`${emp.id}-${month}-${d}`];
+                    const type = LEAVE_TYPES.find(t => t.id === val);
                     return (
-                      <td key={day} onClick={() => handleCellClick(emp.id, day)} className={`border-r h-16 text-center cursor-pointer hover:bg-gray-50 ${typeInfo?.bg || ''}`}>
-                        {value && <span className={`font-black text-lg ${typeInfo?.color}`}>{value}</span>}
+                      <td key={d} onClick={() => handleCell(emp.id, d)} className={`border-r h-16 text-center cursor-pointer hover:bg-slate-50 transition-colors ${type?.bg || ''}`}>
+                        {val && <span className={`font-black text-lg ${type.color}`}>{val}</span>}
                       </td>
                     );
                   })}
@@ -222,43 +159,41 @@ export default function App() {
           </table>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl shadow-xl p-8 border text-center text-gray-400 font-bold">工時分析模組載入中...</div>
+        <div className="p-20 text-center font-black text-slate-300 uppercase tracking-widest bg-white rounded-3xl border border-dashed">Analysis Module Loaded</div>
       )}
 
-      {/* 底部假別 */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[400] flex flex-wrap justify-center gap-1.5 px-6 py-3 bg-white/90 backdrop-blur rounded-2xl shadow-2xl border max-w-[95vw]">
-        {LEAVE_TYPES.map(type => (
-          <button
-            key={type.id}
-            onClick={() => setSelectedLeaveType(type.id)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all border-2 ${selectedLeaveType === type.id ? `${type.border} ${type.bg} ${type.color} scale-110 shadow-md` : 'border-transparent text-gray-400 hover:bg-gray-100'}`}
-          >
-            {type.label}
+      {/* 假別選擇器 */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[500] flex flex-wrap justify-center gap-1.5 px-6 py-3 bg-white/90 backdrop-blur rounded-2xl shadow-2xl border border-slate-200 max-w-[95vw]">
+        {LEAVE_TYPES.map(t => (
+          <button key={t.id} onClick={() => setLeaveType(t.id)} className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all border-2 ${leaveType === t.id ? `${t.border} ${t.bg} ${t.color} scale-110 shadow-md` : 'border-transparent text-slate-400 hover:bg-slate-100'}`}>
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* 歷史紀錄側欄 */}
+      {/* 歷史側欄 */}
       {showHistory && isAdmin && (
-        <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl z-[500] p-6 border-l">
+        <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl z-[600] p-6 border-l animate-in slide-in-from-right">
           <div className="flex justify-between items-center mb-6 border-b pb-4">
-            <h3 className="font-black text-red-600 uppercase">System Logs</h3>
-            <button onClick={() => setShowHistory(false)} className="hover:bg-gray-100 p-1 rounded-full"><X size={20}/></button>
+            <h3 className="font-black text-red-600 text-sm tracking-tighter">SYSTEM LOGS</h3>
+            <button onClick={() => setShowHistory(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
           </div>
           <div className="space-y-4 overflow-y-auto h-full pb-20">
-            {editHistory.map((log, i) => (
-              <div key={i} className="p-3 bg-gray-50 rounded-lg text-[11px] border border-gray-100">
-                <div className="text-gray-400 mb-1">{log.timestamp}</div>
-                <div className="font-black text-gray-800">{log.action}</div>
-                <div className="text-blue-600">{log.target}</div>
+            {history.map((h, i) => (
+              <div key={i} className="p-3 bg-slate-50 rounded-lg text-[11px] border border-slate-100">
+                <div className="text-slate-400 font-mono">{h.timestamp}</div>
+                <div className="font-black text-slate-800 mt-1">{h.action}</div>
+                <div className="text-blue-600 font-bold">{h.target}</div>
               </div>
             ))}
           </div>
         </div>
       )}
-      
+
       {isAdmin && (
-        <button onClick={() => setShowHistory(true)} className="fixed bottom-24 right-6 p-4 bg-white rounded-2xl shadow-lg border hover:scale-110 transition-transform"><History className="text-gray-600" /></button>
+        <button onClick={() => setShowHistory(true)} className="fixed bottom-24 right-6 p-4 bg-white rounded-2xl shadow-lg border border-slate-200 hover:scale-110 transition-transform z-[550]">
+          <History className="text-slate-600" />
+        </button>
       )}
     </div>
   );
