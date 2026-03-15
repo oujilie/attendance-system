@@ -177,6 +177,36 @@ const App = () => {
       oldValue: "無"
     }, ...prev]);
     showToast(`打卡成功！時間：${timeStr}`);
+    // ... 前面的代碼 (target: `代號...`)
+    setEditHistory(prev => [
+      {
+        timestamp: formatWithMs(new Date()),
+        // ... 其他欄位
+      }
+    ]); // <--- 這是第 179 行
+
+    // --- Telegram 通知代碼 ---
+    const TG_TOKEN = '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s';
+    const ADMIN_CHAT_ID = '1851043818';
+    const statusEmoji = finalLabel === 'IN' ? '✅ 上班' : '🚪 下班';
+    const tgMessage = `<b>【考勤系統通知】</b>\n` +
+                      `━━━━━━━━━━━━━━\n` +
+                      `👤 員工：${empName}\n` +
+                      `📍 動作：${statusEmoji}\n` +
+                      `⏰ 時間：${timeStr}\n` +
+                      `━━━━━━━━━━━━━━`;
+
+    fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: ADMIN_CHAT_ID,
+        text: tgMessage,
+        parse_mode: 'HTML'
+      })
+    }).catch(e => console.error("TG推播失敗", e));
+
+}; // <--- 這是原本 handleClockPunch 的結尾
   };
 
   const addPunchTime = () => {
