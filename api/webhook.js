@@ -1,50 +1,36 @@
-// api/webhook.js
 const https = require('https');
 
 export default async function handler(req, res) {
-    // 1. 優先回覆 Telegram 200 OK，避免它瘋狂重傳
     if (req.method !== 'POST') return res.status(200).send('OK');
 
     try {
-        // 2. 診斷：強制抓取 body
-        const body = req.body || {};
-        const message = body.message || {};
-        const chatId = message.chat ? message.chat.id : null;
-        const rawText = message.text || "";
-        
-        // 3. 寬鬆判斷：不論有沒有斜線、不論大小寫
-        const text = rawText.toLowerCase().trim();
+        const { message } = req.body;
+        if (!message || !message.text) return res.status(200).send('OK');
+
+        const chatId = message.chat.id;
+        const text = message.text.toLowerCase().trim();
         const TG_TOKEN = '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s';
 
-        if (!chatId) {
-            console.error("找不到 Chat ID", body);
-            return res.status(200).send('No Chat ID');
-        }
-
         let responseText = "";
-        let replyMarkup = null;
-
-        // 4. 關鍵：只要包含關鍵字就觸發
+        
+        // 更加強健的指令判斷，包含對帶有機器人名字的指令支援
         if (text.includes('check')) {
-            responseText = "📊 <b>打卡工時結算 (模擬)</b>\n━━━━━━━━━━━━━━\n👤 員工：001\n🕒 上班：08:00:00\n🕒 下班：17:30:00\n\n⚖️ <b>結果：</b>\n├ 一般：8.000 h\n└ 加班：1.500 h";
+            responseText = "📊 <b>精確工時模擬結算</b>\n━━━━━━━━━━━━━━\n👤 員工：001\n🕒 上班：08:00:00\n🕒 下班：17:30:00\n\n⚖️ <b>計算結果：</b>\n├ 一般工時：8.000 h\n└ 加班工時：1.500 h";
         } else if (text.includes('today')) {
-            responseText = "📅 <b>今日考勤快報</b>\n━━━━━━━━━━━━━━\n🟢 已打卡：4 人\n🔴 未打卡：11 人";
-            replyMarkup = { inline_keyboard: [[{ text: "🌐 管理系統", url: "https://attendance-system-bice-one.vercel.app" }]] };
+            responseText = "📅 <b>今日打卡總覽</b>\n━━━━━━━━━━━━━━\n🟢 <b>已上班：</b> 4 人\n🔴 <b>已下班：</b> 0 人";
         } else if (text.includes('status')) {
-            responseText = "✅ <b>系統狀態：連線正常</b>\n時間：" + new Date().toLocaleString('zh-TW', {timeZone: 'Asia/Taipei'});
+            responseText = "✅ <b>系統狀態報告</b>\n━━━━━━━━━━━━━━\n● 狀態：連線正常\n● 時間：" + new Date().toLocaleString('zh-TW', {timeZone: 'Asia/Taipei'});
         } else {
-            // 診斷回音：如果抓不到指令，直接把收到的文字噴出來
-            responseText = "⚠️ 偵測到未知內容\n收到的文字：[" + rawText + "]\n請輸入 /check 或 /today";
+            responseText = "⚠️ <b>未知指令</b>\n請嘗試使用 /check、/today 或 /status。";
         }
 
-        const sendData = JSON.stringify({
+        const data = JSON.stringify({
             chat_id: chatId,
             text: responseText,
-            parse_mode: 'HTML',
-            reply_markup: replyMarkup
+            parse_mode: 'HTML'
         });
 
-        // 5. 強制等待傳送完成才結束函式
+        // 關鍵：使用 Promise 確保 Vercel 等待訊息發送成功
         await new Promise((resolve, reject) => {
             const options = {
                 hostname: 'api.telegram.org',
@@ -53,21 +39,24 @@ export default async function handler(req, res) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(sendData)
+                    'Content-Length': Buffer.byteLength(data)
                 }
             };
+
             const tgReq = https.request(options, (tgRes) => {
-                tgRes.on('data', () => {});
+                tgRes.on('data', () => {}); // 消耗數據流
                 tgRes.on('end', resolve);
             });
+
             tgReq.on('error', reject);
-            tgReq.write(sendData);
+            tgReq.write(data);
             tgReq.end();
         });
 
-    } catch (err) {
-        console.error("發送出錯:", err.message);
-    }
+        return res.status(200).json({ status: 'sent' });
 
-    return res.status(200).json({ status: 'done' });
+    } catch (error) {
+        console.error('Webhook Error:', error);
+        return res.status(200).json({ error: error.message });
+    }
 }
