@@ -177,7 +177,27 @@ const App = () => {
     }, ...prev]);
 
     showToast(`打卡成功！時間：${timeStr}`);
-
+// --- 在第 180 行 showToast 之後插入以下代碼 ---
+    
+    // 1. 這裡貼上你從 Apps Script 部署拿到的 URL
+    const GOOGLE_SCRIPT_URL = https://script.google.com/macros/s/AKfycby6k6diDkzKUlENvCumVjWibuFzbRHMGtfrr77Vojhz7zTXBtyFVAYtlNDSQcxYnf6P/exec;
+    
+    try {
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors', // 確保跨網域存取
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          emp_id: empName,
+          action: finalLabel,
+          time: timeStr
+        })
+      });
+    } catch (e) {
+      console.error("同步至 Google Sheets 失敗:", e);
+    }
+    
+    // --- 下方接原本第 181 行的 Telegram 通知代碼 ---
     // --- Telegram 通知代碼 ---
     const TG_TOKEN = '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s';
     const ADMIN_CHAT_ID = '1851043818';
