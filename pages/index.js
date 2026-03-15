@@ -172,6 +172,7 @@ const App = () => {
       target: `代號:${empName}, 日期:${currentDay}日`,
       oldValue: "無"
     }, ...prev]);
+
     showToast(`打卡成功！時間：${timeStr}`);
 
     // --- Telegram 通知代碼 ---
@@ -196,7 +197,6 @@ const App = () => {
     }).catch(e => console.error("TG推播失敗", e));
 
   };
-
   const addPunchTime = () => {
     if (!newPunchTime.trim()) return;
     const punchKey = editingPunch.key;
