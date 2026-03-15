@@ -70,14 +70,10 @@ const App = () => {
   const todayPunchKey = `${currentUser}-${currentMonthStr}-${currentDay}`;
 
   const daysInMonth = useMemo(() => {
-    if (!selectedMonth) return 31; // 預防萬一沒選月份
+    if (!selectedMonth) return 31;
     const [year, month] = selectedMonth.split('-').map(Number);
-    // 這裡記得要補上括號 )
     return new Date(year, month, 0).getDate();
   }, [selectedMonth]);
-
-  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-
   const getDayOfWeek = (day) => {
     const [year, month] = selectedMonth.split('-').map(Number);
     const date = new Date(year, month - 1, day);
@@ -206,7 +202,6 @@ const App = () => {
       })
     }).catch(e => console.error("TG推播失敗", e));
 
-}; // <--- 這是原本 handleClockPunch 的結尾
   };
 
   const addPunchTime = () => {
