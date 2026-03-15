@@ -195,7 +195,12 @@ const App = () => {
       body: JSON.stringify({
         chat_id: ADMIN_CHAT_ID,
         text: tgMessage,
-        parse_mode: 'HTML'
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🌐 開啟考勤系統", url: window.location.href }
+          ]]
+        }
       })
     }).catch(e => console.error("TG推播失敗", e));
 
