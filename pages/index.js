@@ -70,7 +70,9 @@ const App = () => {
   const todayPunchKey = `${currentUser}-${currentMonthStr}-${currentDay}`;
 
   const daysInMonth = useMemo(() => {
+    if (!selectedMonth) return 31; // 預防萬一沒選月份
     const [year, month] = selectedMonth.split('-').map(Number);
+    // 這裡記得要補上括號 )
     return new Date(year, month, 0).getDate();
   }, [selectedMonth]);
 
