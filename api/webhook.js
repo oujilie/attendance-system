@@ -1,4 +1,3 @@
-// api/webhook.js
 import { createClient } from '@supabase/supabase-js';
 const https = require('https');
 
@@ -16,27 +15,33 @@ export default async function handler(req, res) {
 
         const chatId = message.chat.id;
         const text = message.text.toLowerCase().trim();
-        const TG_TOKEN = '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s';
+        const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
         if (text.includes('check')) {
-            // 修正點：一次抓取 1000 筆，確保能抓到 001 以外的其他員工
+            // 抓取所有資料，不限數量
             const { data: records, error } = await supabase
                 .from('attendance')
                 .select('*')
-                .order('created_at', { ascending: true }) // 舊到新排，讓新的蓋掉舊的
-                .limit(1000); 
+                .order('created_at', { ascending: true });
 
             if (error) throw error;
 
+            if (!records || records.length === 0) {
+                await sendTg(chatId, "📭 資料庫目前空空如也，沒有任何打卡紀錄。", TG_TOKEN);
+                return res.status(200).send('OK');
+            }
+
+            // 使用 Map 確保每個工號只顯示最新一筆
             const userMap = new Map();
             records.forEach(r => {
-                // 這裡必須確保欄位名稱 user_name 與截圖完全一致
                 if(r.user_name) userMap.set(r.user_name, r);
             });
 
-            let responseText = `📊 <b>全員狀態 (總計: ${userMap.size} 人)</b>\n━━━━━━━━━━━━━━\n`;
+            let responseText = `📊 <b>全員狀態總覽 (資料庫總筆數: ${records.length})</b>\n`;
+            responseText += `👥 <b>目前已識別工號數: ${userMap.size} 人</b>\n`;
+            responseText += `━━━━━━━━━━━━━━\n`;
             
-            // 轉成陣列並按照工號排序 (例如 001, 002, 003...)
+            // 排序並組合訊息
             const sortedUsers = Array.from(userMap.values()).sort((a, b) => a.user_name.localeCompare(b.user_name));
 
             sortedUsers.forEach(emp => {
@@ -50,16 +55,20 @@ export default async function handler(req, res) {
             await sendTg(chatId, responseText, TG_TOKEN);
         }
     } catch (err) {
-        // 如果報錯，直接把錯誤吐回 Telegram，不要再瞎猜了
-        await sendTg(req.body.message.chat.id, `❌ 程式錯誤: ${err.message}`, '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s');
+        await sendTg(req.body.message.chat.id, `❌ 系統報錯: ${err.message}`, process.env.TELEGRAM_BOT_TOKEN);
     }
     return res.status(200).json({ status: 'done' });
 }
 
-async function sendTg(chatId, text, token) {
-    const data = JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'HTML' });
+async function sendTg(chat_id, text, token) {
+    const data = JSON.stringify({ chat_id, text, parse_mode: 'HTML' });
+    const options = {
+        hostname: 'api.telegram.org',
+        path: `/bot${token}/sendMessage`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
+    };
     return new Promise((resolve) => {
-        const options = { hostname: 'api.telegram.org', path: `/bot${token}/sendMessage`, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } };
         const req = https.request(options, resolve);
         req.write(data);
         req.end();
