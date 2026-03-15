@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-const https = require('https');
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -7,60 +6,69 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-    if (req.method !== 'POST') return res.status(200).send('OK');
+  if (req.method !== 'POST') return res.status(200).send('OK');
 
+  const { message } = req.body;
+  if (!message || !message.text) return res.status(200).send('OK');
+
+  const chatId = message.chat.id;
+  const text = message.text.toLowerCase().trim();
+  const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s';
+
+  if (text.includes('check')) {
     try {
-        const { message } = req.body;
-        if (!message || !message.text) return res.status(200).send('OK');
+      // 同時抓取兩個表，避免漏掉任何資料
+      const [{ data: att }, { data: punch }] = await Promise.all([
+        supabase.from('attendance').select('*').order('created_at', { ascending: true }),
+        supabase.from('punch_logs').select('*').order('created_at', { ascending: true })
+      ]);
 
-        const chatId = message.chat.id;
-        const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+      // 合併所有來源的資料
+      const allRecords = [...(att || []), ...(punch || [])];
+      
+      if (allRecords.length === 0) {
+        await sendToTelegram(chatId, "📭 找不到任何打卡紀錄。", TG_TOKEN);
+        return res.status(200).send('OK');
+      }
 
-        if (message.text.includes('check')) {
-            // 同時檢查兩個可能的資料表
-            const { data: attData } = await supabase.from('attendance').select('user_name');
-            const { data: punchData } = await supabase.from('punch_logs').select('*');
+      // 使用 Map 確保每個工號只顯示最後一筆
+      const userMap = new Map();
+      allRecords.forEach(r => {
+        const id = r.user_name || r.user_id || "未知";
+        userMap.set(id, r);
+      });
 
-            // 診斷訊息
-            let debugMsg = `🔍 <b>系統診斷報告</b>\n`;
-            debugMsg += `表格 [attendance]: ${attData?.length || 0} 筆資料\n`;
-            debugMsg += `表格 [punch_logs]: ${punchData?.length || 0} 筆資料\n\n`;
+      let responseText = `📊 <b>全員考勤狀態表</b>\n━━━━━━━━━━━━━━\n`;
+      
+      // 依照工號排序 (001, 002...)
+      const sortedUsers = Array.from(userMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
-            // 決定使用哪個資料源 (優先使用有資料的，或如果你確定是 punch_logs 就改這裡)
-            const records = (punchData && punchData.length > 0) ? punchData : attData;
-            
-            if (!records || records.length === 0) {
-                return sendTg(chatId, debugMsg + "❌ 兩個表格都抓不到有效的打卡紀錄。", TG_TOKEN);
-            }
+      sortedUsers.forEach(([id, emp]) => {
+        const time = emp.created_at ? new Date(emp.created_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' }) : "--:--";
+        const icon = (emp.type === 'IN' || emp.status === '已打卡') ? '🟢 上班' : '🔴 下班';
+        responseText += `👤 <b>工號：${id}</b>\n${icon} | ⏰ 時間：${time}\n────────────────\n`;
+      });
 
-            const userMap = new Map();
-            // 修正：有些表欄位可能是 user_id 或 name，這裡做相容處理
-            records.forEach(r => {
-                const id = r.user_name || r.user_id || r.name || "未知";
-                userMap.set(id, r);
-            });
-
-            let responseText = debugMsg + `📊 <b>實時狀態 (總計: ${userMap.size} 人)</b>\n━━━━━━━━━━━━━━\n`;
-            
-            Array.from(userMap.values()).forEach(emp => {
-                const id = emp.user_name || emp.user_id || emp.name;
-                const time = emp.created_at ? new Date(emp.created_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' }) : "--:--";
-                const icon = emp.type === 'IN' ? '🟢 上班' : '🔴 下班';
-                responseText += `👤 <b>工號：${id}</b>\n${icon} | ⏰ ${time}\n────────────────\n`;
-            });
-
-            await sendTg(chatId, responseText, TG_TOKEN);
-        }
+      await sendToTelegram(chatId, responseText, TG_TOKEN);
     } catch (err) {
-        await sendTg(req.body.message.chat.id, `❌ 錯誤: ${err.message}`, process.env.TELEGRAM_BOT_TOKEN);
+      await sendToTelegram(chatId, `❌ 發生錯誤: ${err.message}`, TG_TOKEN);
     }
-    return res.status(200).json({ status: 'done' });
+  }
+
+  return res.status(200).json({ status: 'done' });
 }
 
-async function sendTg(chatId, text, token) {
-    const data = JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'HTML' });
-    const options = { hostname: 'api.telegram.org', path: `/bot${token}/sendMessage`, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } };
-    const req = https.request(options, () => {});
-    req.write(data);
-    req.end();
+// 使用 fetch 確保請求在 Serverless 環境下能完整送出
+async function sendToTelegram(chatId, text, token) {
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'HTML'
+    })
+  });
+  return response.json();
 }
