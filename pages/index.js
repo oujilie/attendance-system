@@ -68,7 +68,7 @@ const App = () => {
     ? `${currentTime.getFullYear()}-${(currentTime.getMonth() + 1).toString().padStart(2, '0')}` 
     : '2026-03';
   const todayPunchKey = `${currentUser}-${currentMonthStr}-${currentDay}`;
-
+const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const daysInMonth = useMemo(() => {
     if (!selectedMonth) return 31;
     const [year, month] = selectedMonth.split('-').map(Number);
