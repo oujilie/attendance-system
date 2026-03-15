@@ -2,9 +2,10 @@
 import { createClient } from '@supabase/supabase-js';
 const https = require('https');
 
+// 直接讀取你設定好的 Vercel 環境變數
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 export default async function handler(req, res) {
@@ -16,10 +17,10 @@ export default async function handler(req, res) {
 
         const chatId = message.chat.id;
         const text = message.text.toLowerCase().trim();
-        const TG_TOKEN = '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s';
+        const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
         if (text.includes('check')) {
-            // 1. 抓取所有紀錄，按時間新到舊排序
+            // 從資料表抓取資料，按時間排序
             const { data: records, error } = await supabase
                 .from('attendance')
                 .select('*')
@@ -27,59 +28,60 @@ export default async function handler(req, res) {
 
             if (error) {
                 await sendTg(chatId, `❌ 資料庫錯誤: ${error.message}`, TG_TOKEN);
-                return res.status(200).json({ error: error.message });
+                return res.status(200).send('OK');
             }
 
-            // 2. 過濾重複的人員：只保留每個 user_name 的最新一筆
-            const latestRecords = [];
-            const seenUsers = new Set();
+            // 核心去重邏輯：只保留每個人的最後一筆紀錄
+            const latestStatus = [];
+            const processedUsers = new Set();
 
             for (const record of records) {
-                if (!seenUsers.has(record.user_name)) {
-                    seenUsers.add(record.user_name);
-                    latestRecords.push(record);
+                if (!processedUsers.has(record.user_name)) {
+                    processedUsers.add(record.user_name);
+                    latestStatus.push(record);
                 }
             }
 
-            // 3. 建立全員狀態訊息
-            let responseText = "📊 <b>全員當前考勤狀態</b>\n━━━━━━━━━━━━━━\n";
+            let responseText = "📊 <b>全員當前狀態總覽</b>\n━━━━━━━━━━━━━━\n";
             
-            latestRecords.forEach(emp => {
+            latestStatus.forEach(emp => {
                 const time = new Date(emp.created_at).toLocaleString('zh-TW', { 
                     timeZone: 'Asia/Taipei', 
                     hour: '2-digit', 
                     minute: '2-digit' 
                 });
-                
-                const typeIcon = emp.type === 'IN' ? '🟢 上班' : (emp.type === 'OUT' ? '🔴 下班' : '🟡 ' + emp.type);
+                const icon = emp.type === 'IN' ? '🟢 上班' : (emp.type === 'OUT' ? '🔴 下班' : '🟡 ' + emp.type);
                 
                 responseText += `👤 <b>工號：${emp.user_name}</b>\n`;
-                responseText += `${typeIcon} | ⏰ 時間：${time}\n`;
+                responseText += `${icon} | ⏰ 時間：${time}\n`;
                 responseText += `────────────────\n`;
             });
 
             await sendTg(chatId, responseText, TG_TOKEN);
         } else {
-            await sendTg(chatId, "請輸入 /check 查看全員最新狀態", TG_TOKEN);
+            await sendTg(chatId, "請輸入 /check 查詢所有人狀態", TG_TOKEN);
         }
 
+        return res.status(200).json({ status: 'done' });
     } catch (err) {
-        console.error("發生錯誤:", err.message);
+        console.error(err);
+        return res.status(200).send('OK');
     }
-    return res.status(200).json({ status: 'done' });
 }
 
-// 獨立的發送函式，確保不會跟 handler 邏輯混淆
+// 修正後的發送函式，確保 Vercel 等待請求完成
 async function sendTg(chatId, text, token) {
     const data = JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'HTML' });
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const options = {
             hostname: 'api.telegram.org',
+            port: 443,
             path: `/bot${token}/sendMessage`,
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
         };
         const req = https.request(options, resolve);
+        req.on('error', reject);
         req.write(data);
         req.end();
     });
