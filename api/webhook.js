@@ -2,11 +2,10 @@
 import { createClient } from '@supabase/supabase-js';
 const https = require('https');
 
-// 自動抓取 Vercel 設定的環境變數，解決名稱對不起來的問題
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+);
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(200).send('OK');
@@ -17,55 +16,64 @@ export default async function handler(req, res) {
 
         const chatId = message.chat.id;
         const text = message.text.toLowerCase().trim();
-        const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s';
-
-        let responseText = "";
+        const TG_TOKEN = '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s';
 
         if (text.includes('check')) {
-            // 這裡我將資料表名稱設為 'attendance'，如果你的 Supabase 裡面不是這名字，請告訴我
-            const { data: employees, error } = await supabase
-                .from('attendance') 
-                .select('*');
+            // 抓取 attendance 資料表
+            const { data: records, error } = await supabase
+                .from('attendance')
+                .select('*')
+                .order('created_at', { ascending: false }); // 最新的排上面
 
             if (error) {
-                responseText = `❌ 資料庫連線失敗: ${error.message}`;
-            } else if (!employees || employees.length === 0) {
-                responseText = "📅 <b>今日狀態</b>\n目前資料庫裡還沒有任何打卡紀錄。";
-            } else {
-                responseText = "📊 <b>全員實時工時結算</b>\n━━━━━━━━━━━━━━\n";
-                employees.forEach(emp => {
-                    // 自動判斷欄位：嘗試抓取可能的欄位名稱
-                    const name = emp.name || emp.employee_id || "未知人員";
-                    const status = emp.status || (emp.check_out ? "已下班" : "已打卡");
-                    const timeIn = emp.check_in || emp.start_time || "--:--";
-                    
-                    responseText += `👤 <b>${name}</b> | ${status}\n`;
-                    responseText += `🕒 上班時間：${timeIn}\n`;
-                    responseText += `────────────────\n`;
-                });
+                return sendTg(chatId, `❌ 資料庫錯誤: ${error.message}`, TG_TOKEN);
             }
-        } else if (text.includes('status')) {
-            responseText = `✅ 系統連線診斷：\n- URL: ${supabaseUrl ? "已載入" : "缺失"}\n- Key: ${supabaseKey ? "已載入" : "缺失"}`;
-        } else {
-            responseText = "請輸入 /check 查看全員數據";
-        }
 
-        const data = JSON.stringify({ chat_id: chatId, text: responseText, parse_mode: 'HTML' });
-        
-        await new Promise((resolve) => {
-            const options = {
-                hostname: 'api.telegram.org',
-                path: `/bot${TG_TOKEN}/sendMessage`,
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
-            };
-            const tgReq = https.request(options, resolve);
-            tgReq.write(data);
-            tgReq.end();
-        });
+            if (!records || records.length === 0) {
+                return sendTg(chatId, "📅 今日無打卡紀錄", TG_TOKEN);
+            }
+
+            let responseText = "📊 <b>全員實時打卡紀錄</b>\n━━━━━━━━━━━━━━\n";
+            
+            // 根據你的截圖欄位：user_name, created_at, type
+            records.slice(0, 15).forEach(record => {
+                const time = new Date(record.created_at).toLocaleString('zh-TW', { 
+                    timeZone: 'Asia/Taipei', 
+                    hour12: false, 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                const typeIcon = record.type === 'IN' ? '🟢 上班' : (record.type === 'OUT' ? '🔴 下班' : '🟡 ' + record.type);
+                
+                responseText += `👤 <b>工號：${record.user_name}</b>\n`;
+                responseText += `${typeIcon} | ⏰ ${time}\n`;
+                responseText += `────────────────\n`;
+            });
+
+            await sendTg(chatId, responseText, TG_TOKEN);
+        } else {
+            await sendTg(chatId, "請輸入 /check 查看最新打卡狀態", TG_TOKEN);
+        }
 
     } catch (err) {
         console.error(err);
     }
     return res.status(200).json({ status: 'done' });
+}
+
+// 輔助函式：發送訊息
+async function sendTg(chatId, text, token) {
+    const data = JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'HTML' });
+    return new Promise((resolve) => {
+        const options = {
+            hostname: 'api.telegram.org',
+            path: `/bot${token}/sendMessage`,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
+        };
+        const req = https.request(options, resolve);
+        req.write(data);
+        req.end();
+    });
 }
