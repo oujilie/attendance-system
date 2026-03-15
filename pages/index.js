@@ -180,7 +180,7 @@ const App = () => {
 // --- 在第 180 行 showToast 之後插入以下代碼 ---
     
     // 1. 這裡貼上你從 Apps Script 部署拿到的 URL
-    const GOOGLE_SCRIPT_URL = https://script.google.com/macros/s/AKfycby6k6diDkzKUlENvCumVjWibuFzbRHMGtfrr77Vojhz7zTXBtyFVAYtlNDSQcxYnf6P/exec;
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby6k6diDkzKUlENvCumVjWibuFzbRHMGtfrr77Vojhz7zTXBtyFVAYtlNDSQcxYnf6P/exec';
     
     try {
       fetch(GOOGLE_SCRIPT_URL, {
