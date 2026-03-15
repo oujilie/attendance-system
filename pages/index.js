@@ -68,12 +68,15 @@ const App = () => {
     ? `${currentTime.getFullYear()}-${(currentTime.getMonth() + 1).toString().padStart(2, '0')}` 
     : '2026-03';
   const todayPunchKey = `${currentUser}-${currentMonthStr}-${currentDay}`;
-const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
   const daysInMonth = useMemo(() => {
     if (!selectedMonth) return 31;
     const [year, month] = selectedMonth.split('-').map(Number);
     return new Date(year, month, 0).getDate();
   }, [selectedMonth]);
+
+  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
   const getDayOfWeek = (day) => {
     const [year, month] = selectedMonth.split('-').map(Number);
     const date = new Date(year, month - 1, day);
@@ -197,6 +200,7 @@ const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
     }).catch(e => console.error("TG推播失敗", e));
 
   };
+
   const addPunchTime = () => {
     if (!newPunchTime.trim()) return;
     const punchKey = editingPunch.key;
