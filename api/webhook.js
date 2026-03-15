@@ -16,58 +16,42 @@ export default async function handler(req, res) {
 
         const chatId = message.chat.id;
         const text = message.text.toLowerCase().trim();
-        const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s';
+        const TG_TOKEN = '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s';
 
         if (text.includes('check')) {
-            // 1. 抓取所有紀錄，並按時間從舊到新排序 (讓後面的蓋掉前面的)
+            // 修正點：一次抓取 1000 筆，確保能抓到 001 以外的其他員工
             const { data: records, error } = await supabase
                 .from('attendance')
                 .select('*')
-                .order('created_at', { ascending: true });
+                .order('created_at', { ascending: true }) // 舊到新排，讓新的蓋掉舊的
+                .limit(1000); 
 
-            if (error) {
-                await sendTg(chatId, `❌ 資料庫連線失敗: ${error.message}`, TG_TOKEN);
-                return res.status(200).send('OK');
-            }
+            if (error) throw error;
 
-            // 2. 使用 Map 確保每個 user_name 只保留最新的一筆
             const userMap = new Map();
-            records.forEach(record => {
-                // 因為是按時間由舊到新排，所以同一個工號後面的資料會蓋掉前面的
-                userMap.set(record.user_name, record);
+            records.forEach(r => {
+                // 這裡必須確保欄位名稱 user_name 與截圖完全一致
+                if(r.user_name) userMap.set(r.user_name, r);
             });
 
-            if (userMap.size === 0) {
-                await sendTg(chatId, "📅 目前資料庫中沒有任何打卡紀錄。", TG_TOKEN);
-                return res.status(200).send('OK');
-            }
-
-            // 3. 組合所有人狀態
-            let responseText = "📊 <b>全員當前狀態名單</b>\n━━━━━━━━━━━━━━\n";
+            let responseText = `📊 <b>全員狀態 (總計: ${userMap.size} 人)</b>\n━━━━━━━━━━━━━━\n`;
             
-            userMap.forEach((emp, userName) => {
-                const time = new Date(emp.created_at).toLocaleString('zh-TW', { 
-                    timeZone: 'Asia/Taipei', 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                });
-                
-                const typeIcon = emp.type === 'IN' ? '🟢 上班' : (emp.type === 'OUT' ? '🔴 下班' : '🟡 ' + emp.type);
-                
-                responseText += `👤 <b>工號：${userName}</b>\n`;
-                responseText += `${typeIcon} | ⏰ 最後時間：${time}\n`;
-                responseText += `────────────────\n`;
-            });
+            // 轉成陣列並按照工號排序 (例如 001, 002, 003...)
+            const sortedUsers = Array.from(userMap.values()).sort((a, b) => a.user_name.localeCompare(b.user_name));
 
-            responseText += `\n總計人數：${userMap.size} 人`;
+            sortedUsers.forEach(emp => {
+                const time = new Date(emp.created_at).toLocaleString('zh-TW', { 
+                    timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' 
+                });
+                const icon = emp.type === 'IN' ? '🟢 上班' : (emp.type === 'OUT' ? '🔴 下班' : '🟡 ' + emp.type);
+                responseText += `👤 <b>工號：${emp.user_name}</b>\n${icon} | ⏰ ${time}\n────────────────\n`;
+            });
 
             await sendTg(chatId, responseText, TG_TOKEN);
-        } else {
-            await sendTg(chatId, "請輸入 /check 獲取全員即時狀態。", TG_TOKEN);
         }
-
     } catch (err) {
-        console.error("執行出錯:", err.message);
+        // 如果報錯，直接把錯誤吐回 Telegram，不要再瞎猜了
+        await sendTg(req.body.message.chat.id, `❌ 程式錯誤: ${err.message}`, '8789257005:AAGi3w0zTl3K7jwpFlXPtvjxpBciWbUAg-s');
     }
     return res.status(200).json({ status: 'done' });
 }
@@ -75,12 +59,7 @@ export default async function handler(req, res) {
 async function sendTg(chatId, text, token) {
     const data = JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'HTML' });
     return new Promise((resolve) => {
-        const options = {
-            hostname: 'api.telegram.org',
-            path: `/bot${token}/sendMessage`,
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
-        };
+        const options = { hostname: 'api.telegram.org', path: `/bot${token}/sendMessage`, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } };
         const req = https.request(options, resolve);
         req.write(data);
         req.end();
